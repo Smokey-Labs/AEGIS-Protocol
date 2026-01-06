@@ -15,66 +15,199 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send GitHub update to Discord
+      - name: Post GitHub event to Discord
         env:
           DISCORD_WEBHOOK_RAW: ${{ secrets.DISCORD_WEBHOOK }}
+        shell: bash
         run: |
           set -euo pipefail
 
-          WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_RAW" | tr -d '\r\n')"
-          [ -z "$WEBHOOK" ] && echo "Missing webhook" && exit 1
+          WEBHOOK="$(printf '%s' "${DISCORD_WEBHOOK_RAW:-}" | tr -d '\r\n')"
+          if [ -z "$WEBHOOK" ]; then
+            echo "Missing DISCORD_WEBHOOK secret"
+            exit 1
+          fi
 
           EVENT="${GITHUB_EVENT_NAME}"
-          PAYLOAD_FILE="$GITHUB_EVENT_PATH"
+          ACTION="$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")"
 
-          trim() {
-            python3 - <<'PY'
-          import sys
-          txt=sys.stdin.read().strip().replace("\r","")
-          print(txt[:700] + ("…" if len(txt) > 700 else ""))
-          PY
-          }
+          # Sanitize + truncate helper for text that will go inside embed fields
+          # - remove CR
+          # - prevent ``` from terminating a code block
+          # - clamp length
+          scrub_and_clamp_jq='
+            ( . // "" )
+            | gsub("\r"; "")
+            | gsub("```"; "``\u200b`")
+            | if length > 900 then (.[0:900] + "…") else . end
+          '
 
           case "$EVENT" in
             issue_comment)
-              BODY="$(jq -r '.comment.body' "$PAYLOAD_FILE" | trim)"
-              MSG="$(jq -r --arg body "$BODY" '
-                "🛡️ **AEGIS Protocol — Issue Comment " + .action + "**\n\n" +
-                "[#" + (.issue.number|tostring) + "] " + .issue.title + "\n" +
-                "by " + .comment.user.login + "\n\n" +
-                "\"" + $body + "\"\n\n" +
-                "🔗 View comment: " + .comment.html_url
-              ' "$PAYLOAD_FILE")"
+              NUM="$(jq -r '.issue.number' "$GITHUB_EVENT_PATH")"
+              TITLE="$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")"
+              AUTHOR="$(jq -r '.comment.user.login' "$GITHUB_EVENT_PATH")"
+              URL="$(jq -r '.comment.html_url' "$GITHUB_EVENT_PATH")"
+
+              # IMPORTANT: comment text is here for issue_comment events
+              BODY="$(jq -r ".comment.body | $scrub_and_clamp_jq" "$GITHUB_EVENT_PATH")"
+
+              # If BODY is still empty, print debug to logs (won't post to Discord)
+              echo "Event: $EVENT Action: $ACTION"
+              echo "Comment body length: ${#BODY}"
+
+              PAYLOAD="$(
+                jq -n \
+                  --arg title "🛡️ AEGIS Protocol — Issue Comment ${ACTION}" \
+                  --arg issue "#${NUM} ${TITLE}" \
+                  --arg author "${AUTHOR}" \
+                  --arg url "${URL}" \
+                  --arg body "${BODY}" \
+                  '{
+                    embeds: [
+                      {
+                        title: $title,
+                        url: $url,
+                        description: $issue + "\nby **" + $author + "**",
+                        fields: [
+                          {
+                            name: "Comment",
+                            value: (if ($body | length) == 0 then "_(no comment text found)_" else ("```" + $body + "```") end),
+                            inline: false
+                          }
+                        ]
+                      }
+                    ]
+                  }'
+              )"
               ;;
+
             issues)
-              MSG="$(jq -r '
-                "🛡️ **AEGIS Protocol — Issue " + .action + "**\n\n" +
-                "[#" + (.issue.number|tostring) + "] " + .issue.title + "\n" +
-                "by " + .sender.login + "\n\n" +
-                "🔗 View issue: " + .issue.html_url
-              ' "$PAYLOAD_FILE")"
+              NUM="$(jq -r '.issue.number' "$GITHUB_EVENT_PATH")"
+              TITLE="$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")"
+              AUTHOR="$(jq -r '.sender.login' "$GITHUB_EVENT_PATH")"
+              URL="$(jq -r '.issue.html_url' "$GITHUB_EVENT_PATH")"
+              STATE="$(jq -r '.issue.state' "$GITHUB_EVENT_PATH")"
+              BODY="$(jq -r ".issue.body | $scrub_and_clamp_jq" "$GITHUB_EVENT_PATH")"
+
+              PAYLOAD="$(
+                jq -n \
+                  --arg title "🛡️ AEGIS Protocol — Issue ${ACTION}" \
+                  --arg issue "#${NUM} ${TITLE}" \
+                  --arg author "${AUTHOR}" \
+                  --arg url "${URL}" \
+                  --arg state "${STATE}" \
+                  --arg body "${BODY}" \
+                  '{
+                    embeds: [
+                      {
+                        title: $title,
+                        url: $url,
+                        description: $issue + "\nby **" + $author + "** • state: **" + $state + "**",
+                        fields: [
+                          {
+                            name: "Body",
+                            value: (if ($body | length) == 0 then "_(no issue body)_" else ("```" + $body + "```") end),
+                            inline: false
+                          }
+                        ]
+                      }
+                    ]
+                  }'
+              )"
               ;;
+
             pull_request)
-              MSG="$(jq -r '
-                "🛡️ **AEGIS Protocol — Pull Request " + .action + "**\n\n" +
-                "[#" + (.pull_request.number|tostring) + "] " + .pull_request.title + "\n" +
-                "by " + .pull_request.user.login + "\n\n" +
-                "🔗 View PR: " + .pull_request.html_url
-              ' "$PAYLOAD_FILE")"
+              NUM="$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")"
+              TITLE="$(jq -r '.pull_request.title' "$GITHUB_EVENT_PATH")"
+              AUTHOR="$(jq -r '.pull_request.user.login' "$GITHUB_EVENT_PATH")"
+              URL="$(jq -r '.pull_request.html_url' "$GITHUB_EVENT_PATH")"
+              BRANCH="$(jq -r '.pull_request.head.ref' "$GITHUB_EVENT_PATH")"
+              BASE="$(jq -r '.pull_request.base.ref' "$GITHUB_EVENT_PATH")"
+              BODY="$(jq -r ".pull_request.body | $scrub_and_clamp_jq" "$GITHUB_EVENT_PATH")"
+
+              PAYLOAD="$(
+                jq -n \
+                  --arg title "🛡️ AEGIS Protocol — Pull Request ${ACTION}" \
+                  --arg pr "#${NUM} ${TITLE}" \
+                  --arg author "${AUTHOR}" \
+                  --arg url "${URL}" \
+                  --arg branch "${BRANCH}" \
+                  --arg base "${BASE}" \
+                  --arg body "${BODY}" \
+                  '{
+                    embeds: [
+                      {
+                        title: $title,
+                        url: $url,
+                        description: $pr + "\nby **" + $author + "**\n→ **" + $branch + "** into **" + $base + "**",
+                        fields: [
+                          {
+                            name: "Body",
+                            value: (if ($body | length) == 0 then "_(no PR body)_" else ("```" + $body + "```") end),
+                            inline: false
+                          }
+                        ]
+                      }
+                    ]
+                  }'
+              )"
               ;;
+
             release)
-              NOTES="$(jq -r '.release.body' "$PAYLOAD_FILE" | trim)"
-              MSG="$(jq -r --arg notes "$NOTES" '
-                "🚀 **AEGIS Protocol — New Release**\n\n" +
-                .release.name + " (" + .release.tag_name + ")\n\n" +
-                $notes + "\n\n" +
-                "🔗 View release: " + .release.html_url
-              ' "$PAYLOAD_FILE")"
+              NAME="$(jq -r '.release.name // .release.tag_name // "Release"' "$GITHUB_EVENT_PATH")"
+              TAG="$(jq -r '.release.tag_name // ""' "$GITHUB_EVENT_PATH")"
+              AUTHOR="$(jq -r '.release.author.login // .sender.login // "unknown"' "$GITHUB_EVENT_PATH")"
+              URL="$(jq -r '.release.html_url' "$GITHUB_EVENT_PATH")"
+              NOTES="$(jq -r ".release.body | $scrub_and_clamp_jq" "$GITHUB_EVENT_PATH")"
+
+              PAYLOAD="$(
+                jq -n \
+                  --arg title "🚀 AEGIS Protocol — Release ${ACTION}" \
+                  --arg name "${NAME}" \
+                  --arg tag "${TAG}" \
+                  --arg author "${AUTHOR}" \
+                  --arg url "${URL}" \
+                  --arg notes "${NOTES}" \
+                  '{
+                    embeds: [
+                      {
+                        title: $title,
+                        url: $url,
+                        description: "**" + $name + "**" + (if $tag=="" then "" else (" (`" + $tag + "`)") end) + "\nby **" + $author + "**",
+                        fields: [
+                          {
+                            name: "Notes",
+                            value: (if ($notes | length) == 0 then "_(no release notes)_" else ("```" + $notes + "```") end),
+                            inline: false
+                          }
+                        ]
+                      }
+                    ]
+                  }'
+              )"
               ;;
+
+            workflow_dispatch)
+              PAYLOAD="$(
+                jq -n '{
+                  embeds: [
+                    {
+                      title: "🛡️ AEGIS Protocol — Manual Test",
+                      description: "workflow_dispatch fired successfully.\nIf you can see this, webhook + secret are working."
+                    }
+                  ]
+                }'
+              )"
+              ;;
+
             *)
-              MSG="AEGIS GitHub update: ${EVENT}"
+              PAYLOAD="$(
+                jq -n --arg event "$EVENT" --arg action "$ACTION" '{
+                  content: ("AEGIS GitHub update: **" + $event + "** " + (if $action=="" then "" else ("(" + $action + ")") end))
+                }'
+              )"
               ;;
           esac
 
-          jq -n --arg content "$MSG" '{content: $content}' \
-            | curl -sS -H "Content-Type: application/json" -X POST -d @- "$WEBHOOK"
+          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK"
