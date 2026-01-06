@@ -9,51 +9,112 @@ name: AEGIS GitHub → Discord
     types: [opened, edited, closed, reopened]
   release:
     types: [published]
-
+  workflow_dispatch: {}
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Send event to Discord
+      - name: Post GitHub event to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
         run: |
           python3 - <<'PY'
-          import json, os, urllib.request
+          import json
+          import os
+          import urllib.request
+          import urllib.error
 
-          # Load GitHub event payload
-          with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as f:
-              payload = json.load(f)
+          def pick_url_and_title(payload: dict):
+            # Prefer the object most relevant to the event
+            issue = payload.get("issue") or {}
+            pr = payload.get("pull_request") or {}
+            rel = payload.get("release") or {}
+            repo = payload.get("repository") or {}
 
-          event = os.environ.get("GITHUB_EVENT_NAME", "")
+            url = (
+              issue.get("html_url")
+              or pr.get("html_url")
+              or rel.get("html_url")
+              or repo.get("html_url")
+              or ""
+            )
+
+            title = (
+              issue.get("title")
+              or pr.get("title")
+              or rel.get("name")
+              or repo.get("full_name")
+              or "(no title)"
+            )
+
+            return url, title
+
+          webhook = os.environ.get("DISCORD_WEBHOOK", "").strip()
+          if not webhook:
+            raise SystemExit("DISCORD_WEBHOOK secret is missing/empty. Set repo secret DISCORD_WEBHOOK to your Discord webhook URL.")
+
+          event_name = os.environ.get("GITHUB_EVENT_NAME", "")
           actor = os.environ.get("GITHUB_ACTOR", "")
-          repo  = os.environ.get("GITHUB_REPOSITORY", "")
+          repo_name = os.environ.get("GITHUB_REPOSITORY", "")
+          event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+
+          # Load GitHub event payload from the official path
+          with open(event_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+
           action = payload.get("action", "")
 
-          url = (
-              payload.get("issue", {}).get("html_url")
-              or payload.get("pull_request", {}).get("html_url")
-              or payload.get("release", {}).get("html_url")
-              or payload.get("repository", {}).get("html_url")
-              or ""
-          )
-          title = (
-              payload.get("issue", {}).get("title")
-              or payload.get("pull_request", {}).get("title")
-              or payload.get("release", {}).get("name")
-              or "(no title)"
-          )
+          url, title = pick_url_and_title(payload)
 
-          content = f"**{event} → {action}**\n**Repo:** {repo}\n**Title:** {title}\n**By:** {actor}\n{url}"
+          # Optional: include comment snippet for issue_comment events
+          comment = payload.get("comment") or {}
+          comment_body = (comment.get("body") or "").strip()
+          if event_name == "issue_comment" and comment_body:
+            snippet = comment_body.replace("\r", " ").replace("\n", " ")
+            if len(snippet) > 240:
+              snippet = snippet[:240] + "…"
+            comment_line = f"\n**Comment:** {snippet}"
+          else:
+            comment_line = ""
+
+          content = (
+            f"**{event_name} → {action}**\n"
+            f"**Repo:** {repo_name}\n"
+            f"**Title:** {title}\n"
+            f"**By:** {actor}\n"
+            f"{url}"
+            f"{comment_line}"
+          )
 
           body = json.dumps({"content": content}).encode("utf-8")
+
+          # Safe debug (does not leak webhook)
+          print("Webhook set:", True)
+          print("Event:", event_name, "Action:", action)
+          print("Repo:", repo_name)
+          print("Payload bytes:", len(body))
+          print("Target URL present:", bool(url))
+
           req = urllib.request.Request(
-              os.environ["DISCORD_WEBHOOK"],
-              data=body,
-              headers={"Content-Type": "application/json"},
-              method="POST",
+            webhook,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
           )
-          with urllib.request.urlopen(req, timeout=20) as resp:
-              print("Discord response:", resp.status)
+
+          try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+              print("Discord response status:", resp.status)
+          except urllib.error.HTTPError as e:
+            # Print response body to help debug Discord rejections (still does not leak secret)
+            err_body = e.read().decode("utf-8", errors="replace")
+            raise SystemExit(f"Discord HTTPError {e.code}: {err_body}")
+          except Exception as e:
+            raise SystemExit(f"Discord post failed: {type(e).__name__}: {e}")
           PY
