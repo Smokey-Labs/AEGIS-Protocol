@@ -57,6 +57,25 @@ jobs:
           with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as f:
             data = json.load(f)
 
+          def normalize_body(s, limit=1500):
+            if not s:
+              return ""
+
+            # Normalize line endings but DO NOT strip leading content
+            s = s.replace("\r", "")
+
+            # Remove only leading blank lines (not the first real line)
+            lines = s.split("\n")
+            while lines and lines[0].strip() == "":
+              lines.pop(0)
+
+            s = "\n".join(lines).rstrip()
+
+            if len(s) > limit:
+              s = s[:limit] + "\n…(truncated)"
+
+            return s
+
           def clamp(s, n=700):
             s = (s or "").replace("\r","").strip()
             return s if len(s) <= n else s[:n] + "…"
@@ -76,7 +95,7 @@ jobs:
             c = data.get("comment", {})
             title = issue.get("title","")
             url = c.get("html_url") or issue.get("html_url","")
-            details = clamp(c.get("body",""))
+            details = normalize_body(c.get("body",""), limit=1500)
 
           elif event == "pull_request":
             pr = data.get("pull_request", {})
