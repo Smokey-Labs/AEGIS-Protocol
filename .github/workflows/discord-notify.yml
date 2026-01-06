@@ -2,19 +2,18 @@ name: AEGIS GitHub -> Discord
 
 on:
   issues:
-    types: [opened, edited, closed, reopened]
+    types: [opened, edited, closed, reopened, labeled, unlabeled, assigned, unassigned]
   issue_comment:
-    types: [created]
+    types: [created, edited]
   pull_request:
-    types: [opened, edited, closed, reopened]
+    types: [opened, edited, closed, reopened, ready_for_review, converted_to_draft, synchronize]
   release:
-    types: [published]
+    types: [published, edited]
   workflow_dispatch:
 
 jobs:
   notify:
     runs-on: ubuntu-latest
-
     steps:
       - name: Post GitHub event to Discord
         env:
@@ -27,122 +26,116 @@ jobs:
             exit 2
           fi
 
-          # Clean webhook URL (remove CR/LF)
           DISCORD_WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_RAW" | tr -d '\r\n')"
-
           case "$DISCORD_WEBHOOK" in
             https://discord.com/api/webhooks/*|https://discordapp.com/api/webhooks/*) ;;
+            *) echo "DISCORD_WEBHOOK does not look like a Discord webhook URL."; exit 3 ;;
+          esac
+
+          EVENT="${GITHUB_EVENT_NAME}"
+          ACTION="$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")"
+          REPO="${GITHUB_REPOSITORY}"
+          ACTOR="${GITHUB_ACTOR}"
+
+          # Helper: trim long text for Discord (keep it readable)
+          trim() {
+            # args: maxlen
+            local maxlen="$1"
+            python3 - <<'PY' "$maxlen"
+import sys
+maxlen=int(sys.argv[1])
+s=sys.stdin.read()
+s=s.replace("\r","")
+s=s.strip()
+if len(s) > maxlen:
+    s = s[:maxlen-1] + "…"
+print(s)
+PY
+          }
+
+          # Build a nice message depending on event type.
+          # We assemble fields with jq so newlines are real newlines (not "\n").
+          case "$EVENT" in
+            issues)
+              MSG="$(jq -r '
+                def labels: (.issue.labels // [] | map(.name) | join(", "));
+                [
+                  "**issues → \(.action)**",
+                  "**Repo:** \(.repository.full_name)",
+                  "**Issue:** #\(.issue.number) — \(.issue.title)",
+                  (if (labels | length) > 0 then "**Labels:** " + labels else empty end),
+                  "**State:** \(.issue.state)",
+                  "**By:** \(.sender.login)",
+                  "\(.issue.html_url)"
+                ] | join("\n")
+              ' "$GITHUB_EVENT_PATH")"
+              ;;
+
+            issue_comment)
+              BODY="$(jq -r '.comment.body // ""' "$GITHUB_EVENT_PATH" | trim 800)"
+              MSG="$(jq -r --arg body "$BODY" '
+                [
+                  "**issue_comment → \(.action)**",
+                  "**Repo:** \(.repository.full_name)",
+                  "**Issue:** #\(.issue.number) — \(.issue.title)",
+                  "**Comment by:** \(.comment.user.login)",
+                  "",
+                  $body,
+                  "",
+                  "\(.comment.html_url)"
+                ] | join("\n")
+              ' "$GITHUB_EVENT_PATH")"
+              ;;
+
+            pull_request)
+              MSG="$(jq -r '
+                [
+                  "**pull_request → \(.action)**",
+                  "**Repo:** \(.repository.full_name)",
+                  "**PR:** #\(.pull_request.number) — \(.pull_request.title)",
+                  "**From:** \(.pull_request.head.ref) → \(.pull_request.base.ref)",
+                  (if .pull_request.draft then "**Draft:** yes" else empty end),
+                  "**By:** \(.pull_request.user.login)",
+                  "\(.pull_request.html_url)"
+                ] | join("\n")
+              ' "$GITHUB_EVENT_PATH")"
+              ;;
+
+            release)
+              NOTES="$(jq -r '.release.body // ""' "$GITHUB_EVENT_PATH" | trim 900)"
+              MSG="$(jq -r --arg notes "$NOTES" '
+                [
+                  "**release → \(.action)**",
+                  "**Repo:** \(.repository.full_name)",
+                  "**Release:** \(.release.name // "(unnamed)")",
+                  "**Tag:** \(.release.tag_name // "(none)")",
+                  "",
+                  $notes,
+                  "",
+                  "\(.release.html_url)"
+                ] | join("\n")
+              ' "$GITHUB_EVENT_PATH")"
+              ;;
+
+            workflow_dispatch)
+              MSG="**workflow_dispatch → manual test**\n**Repo:** ${REPO}\n**By:** ${ACTOR}\n(Manual trigger — no payload details)"
+              ;;
+
             *)
-              echo "DISCORD_WEBHOOK does not look like a Discord webhook URL."
-              exit 3
+              # Fallback (shouldn’t happen with your triggers)
+              URL="$(jq -r '.repository.html_url // ""' "$GITHUB_EVENT_PATH")"
+              MSG="**${EVENT} → ${ACTION}**\n**Repo:** ${REPO}\n**By:** ${ACTOR}\n${URL}"
               ;;
           esac
 
-          EVENT_NAME="${GITHUB_EVENT_NAME}"
-          ACTOR="${GITHUB_ACTOR}"
-          REPO="${GITHUB_REPOSITORY}"
-          ACTION="$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")"
+          PAYLOAD="$(jq -n --arg content "$MSG" '{content: $content}')"
 
-          # Helper: truncate long text safely
-          trunc() {
-            # usage: trunc "text" 300
-            local s="$1"
-            local n="${2:-300}"
-            # normalize CRLF, keep newlines, then truncate
-            s="$(printf '%s' "$s" | tr -d '\r')"
-            if [ "${#s}" -le "$n" ]; then
-              printf '%s' "$s"
-            else
-              printf '%s…' "${s:0:$n}"
-            fi
-          }
-
-          # Build event-specific details
-          TITLE=""
-          URL=""
-          DETAILS=""
-
-          if [ "$EVENT_NAME" = "issue_comment" ]; then
-            TITLE="$(jq -r '.issue.title // "(no title)"' "$GITHUB_EVENT_PATH")"
-            URL="$(jq -r '.comment.html_url // .issue.html_url // ""' "$GITHUB_EVENT_PATH")"
-            COMMENTER="$(jq -r '.comment.user.login // ""' "$GITHUB_EVENT_PATH")"
-            BODY_RAW="$(jq -r '.comment.body // ""' "$GITHUB_EVENT_PATH")"
-            BODY="$(trunc "$BODY_RAW" 600)"
-
-            DETAILS="$(cat <<EOF
-**Comment by:** ${COMMENTER}
-**Comment:**
-${BODY}
-EOF
-)"
-          elif [ "$EVENT_NAME" = "issues" ]; then
-            TITLE="$(jq -r '.issue.title // "(no title)"' "$GITHUB_EVENT_PATH")"
-            URL="$(jq -r '.issue.html_url // ""' "$GITHUB_EVENT_PATH")"
-            STATE="$(jq -r '.issue.state // ""' "$GITHUB_EVENT_PATH")"
-            BODY_RAW="$(jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH")"
-            BODY="$(trunc "$BODY_RAW" 500)"
-
-            DETAILS="$(cat <<EOF
-**State:** ${STATE}
-**Issue body:**
-${BODY}
-EOF
-)"
-          elif [ "$EVENT_NAME" = "pull_request" ]; then
-            TITLE="$(jq -r '.pull_request.title // "(no title)"' "$GITHUB_EVENT_PATH")"
-            URL="$(jq -r '.pull_request.html_url // ""' "$GITHUB_EVENT_PATH")"
-            PR_STATE="$(jq -r '.pull_request.state // ""' "$GITHUB_EVENT_PATH")"
-            PR_NUM="$(jq -r '.pull_request.number // ""' "$GITHUB_EVENT_PATH")"
-            PR_BODY_RAW="$(jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH")"
-            PR_BODY="$(trunc "$PR_BODY_RAW" 500)"
-
-            DETAILS="$(cat <<EOF
-**PR:** #${PR_NUM} (${PR_STATE})
-**Description:**
-${PR_BODY}
-EOF
-)"
-          elif [ "$EVENT_NAME" = "release" ]; then
-            TITLE="$(jq -r '.release.name // .release.tag_name // "(no title)"' "$GITHUB_EVENT_PATH")"
-            URL="$(jq -r '.release.html_url // ""' "$GITHUB_EVENT_PATH")"
-            TAG="$(jq -r '.release.tag_name // ""' "$GITHUB_EVENT_PATH")"
-            REL_BODY_RAW="$(jq -r '.release.body // ""' "$GITHUB_EVENT_PATH")"
-            REL_BODY="$(trunc "$REL_BODY_RAW" 700)"
-
-            DETAILS="$(cat <<EOF
-**Tag:** ${TAG}
-**Release notes:**
-${REL_BODY}
-EOF
-)"
-          else
-            TITLE="(unhandled event)"
-            URL="$(jq -r '.repository.html_url // ""' "$GITHUB_EVENT_PATH")"
-            DETAILS="(No details parser for this event.)"
-          fi
-
-          HEADER="**${REPO}** — ${EVENT_NAME} → **${ACTION}**"
-          META="$(cat <<EOF
-**Title:** ${TITLE}
-**By:** ${ACTOR}
-${URL}
-EOF
-)"
-
-          # IMPORTANT: preserve real newlines by passing content as raw string to jq
-          CONTENT="$(cat <<EOF
-${HEADER}
-${META}
-
-${DETAILS}
-EOF
-)"
-
-          PAYLOAD="$(jq -n --arg content "$CONTENT" '{content: $content}')"
+          echo "Event=${EVENT} Action=${ACTION}"
+          echo "Payload bytes: $(printf '%s' "$PAYLOAD" | wc -c | tr -d ' ')"
 
           curl -sS --fail-with-body \
             -H "Content-Type: application/json" \
-            -H "User-Agent: GitHubActions-AEGIS/1.0 (+https://github.com/'"$REPO"' )" \
+            -H "User-Agent: GitHubActions-AEGIS/1.0 (+https://github.com/${REPO})" \
             -X POST \
             -d "$PAYLOAD" \
             "$DISCORD_WEBHOOK"
