@@ -1,8 +1,8 @@
-name: AEGIS GitHub -> Discord
+name: AEGIS GitHub → Discord
 
 on:
   issues:
-    types: [opened, edited, closed, reopened, labeled, unlabeled, assigned, unassigned]
+    types: [opened, edited, closed, reopened]
   issue_comment:
     types: [created, edited]
   pull_request:
@@ -15,129 +15,66 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Post GitHub event to Discord
+      - name: Send GitHub update to Discord
         env:
           DISCORD_WEBHOOK_RAW: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           set -euo pipefail
 
-          if [ -z "${DISCORD_WEBHOOK_RAW:-}" ]; then
-            echo "DISCORD_WEBHOOK secret is empty or not set."
-            exit 2
-          fi
-
-          DISCORD_WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_RAW" | tr -d '\r\n')"
-          case "$DISCORD_WEBHOOK" in
-            https://discord.com/api/webhooks/*|https://discordapp.com/api/webhooks/*) ;;
-            *) echo "DISCORD_WEBHOOK does not look like a Discord webhook URL."; exit 3 ;;
-          esac
+          WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK_RAW" | tr -d '\r\n')"
+          [ -z "$WEBHOOK" ] && echo "Missing webhook" && exit 1
 
           EVENT="${GITHUB_EVENT_NAME}"
-          ACTION="$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")"
-          REPO="${GITHUB_REPOSITORY}"
-          ACTOR="${GITHUB_ACTOR}"
+          PAYLOAD_FILE="$GITHUB_EVENT_PATH"
 
-          # Helper: trim long text for Discord (keep it readable)
           trim() {
-            # args: maxlen
-            local maxlen="$1"
-            python3 - <<'PY' "$maxlen"
+            python3 - <<'PY'
 import sys
-maxlen=int(sys.argv[1])
-s=sys.stdin.read()
-s=s.replace("\r","")
-s=s.strip()
-if len(s) > maxlen:
-    s = s[:maxlen-1] + "…"
-print(s)
+txt=sys.stdin.read().strip().replace("\r","")
+print(txt[:700] + ("…" if len(txt) > 700 else ""))
 PY
           }
 
-          # Build a nice message depending on event type.
-          # We assemble fields with jq so newlines are real newlines (not "\n").
           case "$EVENT" in
+            issue_comment)
+              BODY="$(jq -r '.comment.body' "$PAYLOAD_FILE" | trim)"
+              MSG="$(jq -r --arg body "$BODY" '
+                "🛡️ **AEGIS Protocol — Issue Comment " + .action + "**\n\n" +
+                "[#" + (.issue.number|tostring) + "] " + .issue.title + "\n" +
+                "by " + .comment.user.login + "\n\n" +
+                "\"" + $body + "\"\n\n" +
+                "🔗 View comment: " + .comment.html_url
+              ' "$PAYLOAD_FILE")"
+              ;;
             issues)
               MSG="$(jq -r '
-                def labels: (.issue.labels // [] | map(.name) | join(", "));
-                [
-                  "**issues → \(.action)**",
-                  "**Repo:** \(.repository.full_name)",
-                  "**Issue:** #\(.issue.number) — \(.issue.title)",
-                  (if (labels | length) > 0 then "**Labels:** " + labels else empty end),
-                  "**State:** \(.issue.state)",
-                  "**By:** \(.sender.login)",
-                  "\(.issue.html_url)"
-                ] | join("\n")
-              ' "$GITHUB_EVENT_PATH")"
+                "🛡️ **AEGIS Protocol — Issue " + .action + "**\n\n" +
+                "[#" + (.issue.number|tostring) + "] " + .issue.title + "\n" +
+                "by " + .sender.login + "\n\n" +
+                "🔗 View issue: " + .issue.html_url
+              ' "$PAYLOAD_FILE")"
               ;;
-
-            issue_comment)
-              BODY="$(jq -r '.comment.body // ""' "$GITHUB_EVENT_PATH" | trim 800)"
-              MSG="$(jq -r --arg body "$BODY" '
-                [
-                  "**issue_comment → \(.action)**",
-                  "**Repo:** \(.repository.full_name)",
-                  "**Issue:** #\(.issue.number) — \(.issue.title)",
-                  "**Comment by:** \(.comment.user.login)",
-                  "",
-                  $body,
-                  "",
-                  "\(.comment.html_url)"
-                ] | join("\n")
-              ' "$GITHUB_EVENT_PATH")"
-              ;;
-
             pull_request)
               MSG="$(jq -r '
-                [
-                  "**pull_request → \(.action)**",
-                  "**Repo:** \(.repository.full_name)",
-                  "**PR:** #\(.pull_request.number) — \(.pull_request.title)",
-                  "**From:** \(.pull_request.head.ref) → \(.pull_request.base.ref)",
-                  (if .pull_request.draft then "**Draft:** yes" else empty end),
-                  "**By:** \(.pull_request.user.login)",
-                  "\(.pull_request.html_url)"
-                ] | join("\n")
-              ' "$GITHUB_EVENT_PATH")"
+                "🛡️ **AEGIS Protocol — Pull Request " + .action + "**\n\n" +
+                "[#" + (.pull_request.number|tostring) + "] " + .pull_request.title + "\n" +
+                "by " + .pull_request.user.login + "\n\n" +
+                "🔗 View PR: " + .pull_request.html_url
+              ' "$PAYLOAD_FILE")"
               ;;
-
             release)
-              NOTES="$(jq -r '.release.body // ""' "$GITHUB_EVENT_PATH" | trim 900)"
+              NOTES="$(jq -r '.release.body' "$PAYLOAD_FILE" | trim)"
               MSG="$(jq -r --arg notes "$NOTES" '
-                [
-                  "**release → \(.action)**",
-                  "**Repo:** \(.repository.full_name)",
-                  "**Release:** \(.release.name // "(unnamed)")",
-                  "**Tag:** \(.release.tag_name // "(none)")",
-                  "",
-                  $notes,
-                  "",
-                  "\(.release.html_url)"
-                ] | join("\n")
-              ' "$GITHUB_EVENT_PATH")"
+                "🚀 **AEGIS Protocol — New Release**\n\n" +
+                .release.name + " (" + .release.tag_name + ")\n\n" +
+                $notes + "\n\n" +
+                "🔗 View release: " + .release.html_url
+              ' "$PAYLOAD_FILE")"
               ;;
-
-            workflow_dispatch)
-              MSG="**workflow_dispatch → manual test**\n**Repo:** ${REPO}\n**By:** ${ACTOR}\n(Manual trigger — no payload details)"
-              ;;
-
             *)
-              # Fallback (shouldn’t happen with your triggers)
-              URL="$(jq -r '.repository.html_url // ""' "$GITHUB_EVENT_PATH")"
-              MSG="**${EVENT} → ${ACTION}**\n**Repo:** ${REPO}\n**By:** ${ACTOR}\n${URL}"
+              MSG="AEGIS GitHub update: ${EVENT}"
               ;;
           esac
 
-          PAYLOAD="$(jq -n --arg content "$MSG" '{content: $content}')"
-
-          echo "Event=${EVENT} Action=${ACTION}"
-          echo "Payload bytes: $(printf '%s' "$PAYLOAD" | wc -c | tr -d ' ')"
-
-          curl -sS --fail-with-body \
-            -H "Content-Type: application/json" \
-            -H "User-Agent: GitHubActions-AEGIS/1.0 (+https://github.com/${REPO})" \
-            -X POST \
-            -d "$PAYLOAD" \
-            "$DISCORD_WEBHOOK"
-
-          echo "Discord post: OK"
+          jq -n --arg content "$MSG" '{content: $content}' \
+            | curl -sS -H "Content-Type: application/json" -X POST -d @- "$WEBHOOK"
