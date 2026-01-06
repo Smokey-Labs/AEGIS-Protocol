@@ -1,0 +1,35 @@
+name: AEGIS GitHub → Discord
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, edited, closed, reopened]
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send event to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          EVENT_NAME="${{ github.event_name }}"
+          ACTOR="${{ github.actor }}"
+          REPO="${{ github.repository }}"
+          URL="${{ github.event.issue.html_url || github.event.pull_request.html_url || github.event.release.html_url }}"
+          TITLE="${{ github.event.issue.title || github.event.pull_request.title || github.event.release.name }}"
+          ACTION="${{ github.event.action }}"
+
+          payload=$(jq -n \
+            --arg content "**$EVENT_NAME → $ACTION**\n**Repo:** $REPO\n**Title:** $TITLE\n**By:** $ACTOR\n$URL" \
+            '{content: $content}')
+
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "$payload" \
+               "$DISCORD_WEBHOOK"
