@@ -29,10 +29,10 @@ jobs:
 
           trim() {
             python3 - <<'PY'
-import sys
-txt=sys.stdin.read().strip().replace("\r","")
-print(txt[:700] + ("…" if len(txt) > 700 else ""))
-PY
+          import sys
+          txt=sys.stdin.read().strip().replace("\r","")
+          print(txt[:700] + ("…" if len(txt) > 700 else ""))
+          PY
           }
 
           case "$EVENT" in
