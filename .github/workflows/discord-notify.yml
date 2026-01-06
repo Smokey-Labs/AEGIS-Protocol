@@ -32,21 +32,16 @@ jobs:
           EVENT="${GITHUB_EVENT_NAME}"
           ACTION="$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")"
 
-          # Sanitize text for Discord:
-          # - remove CR
-          # - prevent ``` from breaking code blocks
-          # - clamp length
           sanitize() {
             python3 - "$1" <<'PY'
-          import sys
-          s = sys.argv[1] if len(sys.argv) > 1 else ""
-          s = s.replace("\r", "")
-          s = s.replace("```", "``\u200b`")
-          # clamp to ~900 so embed field stays safe
-          if len(s) > 900:
-            s = s[:900] + "…"
-          print(s)
-          PY
+import sys
+s = sys.argv[1] if len(sys.argv) > 1 else ""
+s = s.replace("\r", "")
+s = s.replace("```", "``\u200b`")
+if len(s) > 900:
+    s = s[:900] + "…"
+print(s)
+PY
           }
 
           post_embed() {
@@ -56,7 +51,6 @@ jobs:
             local field_name="$4"
             local field_value="$5"
 
-            # If empty, show a placeholder so we don't post blank fields
             if [ -z "$field_value" ]; then
               field_value="_(no text found)_"
             else
@@ -101,7 +95,7 @@ jobs:
               BODY="$(sanitize "$BODY_RAW")"
 
               DESC="[#${NUM}] ${TITLE}\nby **${AUTHOR}**"
-              post_embed "🛡️ AEGIS Protocol — Issue Comment ${ACTION}" "$URL" "$DESC" "Comment" "$BODY"
+              post_embed "🛡️ AEGIS — Issue Comment ${ACTION}" "$URL" "$DESC" "Comment" "$BODY"
               ;;
 
             issues)
@@ -114,7 +108,7 @@ jobs:
               BODY="$(sanitize "$BODY_RAW")"
 
               DESC="[#${NUM}] ${TITLE}\nby **${AUTHOR}** • state: **${STATE}**"
-              post_embed "🛡️ AEGIS Protocol — Issue ${ACTION}" "$URL" "$DESC" "Body" "$BODY"
+              post_embed "🛡️ AEGIS — Issue ${ACTION}" "$URL" "$DESC" "Body" "$BODY"
               ;;
 
             pull_request)
@@ -128,7 +122,7 @@ jobs:
               BODY="$(sanitize "$BODY_RAW")"
 
               DESC="[#${NUM}] ${TITLE}\nby **${AUTHOR}**\n→ **${BRANCH}** into **${BASE}**"
-              post_embed "🛡️ AEGIS Protocol — Pull Request ${ACTION}" "$URL" "$DESC" "Body" "$BODY"
+              post_embed "🛡️ AEGIS — Pull Request ${ACTION}" "$URL" "$DESC" "Body" "$BODY"
               ;;
 
             release)
@@ -145,13 +139,13 @@ jobs:
                 DESC="**${NAME}**\nby **${AUTHOR}**"
               fi
 
-              post_embed "🚀 AEGIS Protocol — Release ${ACTION}" "$URL" "$DESC" "Notes" "$NOTES"
+              post_embed "🚀 AEGIS — Release ${ACTION}" "$URL" "$DESC" "Notes" "$NOTES"
               ;;
 
             workflow_dispatch)
               URL="https://github.com/${GITHUB_REPOSITORY}/actions"
               DESC="Manual test fired successfully.\nIf you see this, webhook + secret are working."
-              post_embed "🧪 AEGIS Protocol — Manual Test" "$URL" "$DESC" "Status" "OK"
+              post_embed "🧪 AEGIS — Manual Test" "$URL" "$DESC" "Status" "OK"
               ;;
 
             *)
