@@ -49,36 +49,29 @@ jobs:
           import json, os
 
           event = os.environ.get("GITHUB_EVENT_NAME", "")
-          action = os.environ.get("GITHUB_EVENT_ACTION", "") or ""
+          action = (os.environ.get("GITHUB_EVENT_ACTION", "") or "").strip()
           repo = os.environ.get("GITHUB_REPOSITORY", "")
           actor = os.environ.get("GITHUB_ACTOR", "")
+
+          server_url = os.environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+          run_id = (os.environ.get("GITHUB_RUN_ID", "") or "").strip()
+          run_url = f"{server_url}/{repo}/actions/runs/{run_id}" if repo and run_id else ""
 
           # Read the event payload
           with open(os.environ["GITHUB_EVENT_PATH"], "r", encoding="utf-8") as f:
             data = json.load(f)
 
-          def normalize_body(s, limit=1500):
-            if not s:
-              return ""
-
-            # Normalize line endings but DO NOT strip leading content
-            s = s.replace("\r", "")
-
-            # Remove only leading blank lines (not the first real line)
-            lines = s.split("\n")
-            while lines and lines[0].strip() == "":
-              lines.pop(0)
-
-            s = "\n".join(lines).rstrip()
-
-            if len(s) > limit:
-              s = s[:limit] + "\n…(truncated)"
-
-            return s
-
           def clamp(s, n=700):
             s = (s or "").replace("\r","").strip()
             return s if len(s) <= n else s[:n] + "…"
+
+          def strip_leading_blank_lines(s):
+            if not s:
+              return ""
+            lines = s.replace("\r", "").split("\n")
+            while lines and lines[0].strip() == "":
+              lines.pop(0)
+            return "\n".join(lines).strip()
 
           title = ""
           url = ""
@@ -95,7 +88,7 @@ jobs:
             c = data.get("comment", {})
             title = issue.get("title","")
             url = c.get("html_url") or issue.get("html_url","")
-            details = normalize_body(c.get("body",""), limit=1500)
+            details = clamp(c.get("body",""))
 
           elif event == "pull_request":
             pr = data.get("pull_request", {})
@@ -109,17 +102,49 @@ jobs:
             url = rel.get("html_url","")
             details = clamp(rel.get("body",""))
 
+          elif event == "workflow_dispatch":
+            # workflow_dispatch has no "action" in the payload; treat as manual
+            if not action:
+              action = "manual"
+
+            # Prefer a link to the specific run; fallback to repo URL.
+            url = run_url or data.get("repository", {}).get("html_url","")
+
+            # Show branch/ref + inputs (if any)
+            ref = data.get("ref", "") or os.environ.get("GITHUB_REF", "")
+            ref_name = (os.environ.get("GITHUB_REF_NAME", "") or "").strip()
+
+            inputs = data.get("inputs") or {}
+            if isinstance(inputs, dict) and inputs:
+              inputs_lines = [f"{k}: {v}" for k, v in inputs.items()]
+              inputs_text = "Inputs:\n" + "\n".join(inputs_lines)
+            else:
+              inputs_text = "Inputs: (none)"
+
+            # Title for workflow_dispatch
+            title = "Manual Run"
+            # Details block
+            ref_display = ref_name or ref or "(unknown)"
+            details = clamp(f"Ref: {ref_display}\n{inputs_text}")
+
           else:
+            # Generic fallback
+            if not action:
+              action = "event"
             title = "(event)"
-            url = data.get("repository", {}).get("html_url","")
+            url = run_url or data.get("repository", {}).get("html_url","") or (f"{server_url}/{repo}" if repo else "")
             details = ""
 
+          # Remove leading blank lines so Discord doesn't "eat" the first line in code blocks
+          details = strip_leading_blank_lines(details)
+
           header = f"**AEGIS GitHub** • `{event}` → `{action}`"
-          line2 = f"**Repo:** `{repo}`"
-          line3 = f"**By:** `{actor}`"
+          line2 = f"**Repo:** `{repo}`" if repo else ""
+          line3 = f"**By:** `{actor}`" if actor else ""
           line4 = f"**Title:** {title}" if title else ""
           line5 = f"**Link:** {url}" if url else ""
-          line6 = f"**Details:**\n```{details}```" if details else ""
+          # Code block with explicit newlines for stable rendering
+          line6 = f"**Details:**\n```\n{details}\n```" if details else ""
 
           msg = "\n".join([x for x in [header, line2, line3, line4, line5, line6] if x])
 
@@ -127,7 +152,6 @@ jobs:
           PY
 
           # Post with a normal User-Agent and show response body on failure
-          # If Cloudflare blocks, you'll see HTML in the output.
           curl --silent --show-error --fail-with-body \
             -H "Content-Type: application/json" \
             -H "User-Agent: GitHubActions-DiscordWebhook/1.0" \
