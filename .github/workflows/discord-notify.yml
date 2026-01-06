@@ -21,114 +21,118 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 -c "
-import json, os, sys, urllib.request, urllib.error
+          python3 - <<'PY'
+          import json, os, sys, urllib.request, urllib.error
 
-webhook = (os.environ.get('DISCORD_WEBHOOK') or '').strip()
-if not webhook:
-    print('Missing DISCORD_WEBHOOK secret', file=sys.stderr)
-    sys.exit(1)
+          webhook = (os.environ.get("DISCORD_WEBHOOK") or "").strip()
+          if not webhook:
+              print("Missing DISCORD_WEBHOOK secret", file=sys.stderr)
+              sys.exit(1)
 
-event_path = os.environ.get('GITHUB_EVENT_PATH')
-event_name = os.environ.get('GITHUB_EVENT_NAME', '')
-repo = os.environ.get('GITHUB_REPOSITORY', '')
-actor = os.environ.get('GITHUB_ACTOR', '')
+          event_path = os.environ.get("GITHUB_EVENT_PATH")
+          event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+          repo = os.environ.get("GITHUB_REPOSITORY", "")
+          actor = os.environ.get("GITHUB_ACTOR", "")
 
-with open(event_path, 'r', encoding='utf-8') as f:
-    payload = json.load(f)
+          with open(event_path, "r", encoding="utf-8") as f:
+              payload = json.load(f)
 
-action = payload.get('action', '')
+          action = payload.get("action", "")
 
-def clamp(s, n=1200):
-    s = (s or '').replace('\\r', '').strip()
-    if len(s) > n:
-        return s[:n] + '…'
-    return s
+          def clamp(s: str, n: int = 1400) -> str:
+              s = (s or "").replace("\r", "").strip()
+              return (s[:n] + "…") if len(s) > n else s
 
-def codeblock(s):
-    s = clamp(s)
-    if not s:
-        return ''
-    # avoid breaking Markdown with triple backticks
-    s = s.replace('```', '``\\u200b`')
-    return f'```{s}```'
+          def codeblock(s: str) -> str:
+              s = clamp(s)
+              if not s:
+                  return ""
+              s = s.replace("```", "``\u200b`")  # prevent breaking code fences
+              return f"```{s}```"
 
-def pick(*paths):
-    # paths: list of (obj, key, key, ...)
-    for p in paths:
-        cur = payload
-        ok = True
-        for k in p:
-            if isinstance(cur, dict) and k in cur:
-                cur = cur[k]
-            else:
-                ok = False
-                break
-        if ok and cur:
-            return cur
-    return None
+          def deep_get(obj, path):
+              cur = obj
+              for key in path:
+                  if isinstance(cur, dict) and key in cur:
+                      cur = cur[key]
+                  else:
+                      return None
+              return cur
 
-# Common URLs / titles
-url = (
-    pick(('comment','html_url'), ('issue','html_url'), ('pull_request','html_url'), ('release','html_url'))
-    or pick(('repository','html_url'))
-    or ''
-)
+          def first(*candidates):
+              for obj, path in candidates:
+                  val = deep_get(obj, path)
+                  if val:
+                      return val
+              return None
 
-title = (
-    pick(('issue','title'), ('pull_request','title'), ('release','name'))
-    or pick(('release','tag_name'))
-    or '(no title)'
-)
+          # URLs and titles
+          url = first(
+              (payload, ["comment", "html_url"]),
+              (payload, ["issue", "html_url"]),
+              (payload, ["pull_request", "html_url"]),
+              (payload, ["release", "html_url"]),
+              (payload, ["repository", "html_url"]),
+          ) or ""
 
-number = (
-    pick(('issue','number'), ('pull_request','number'))
-)
+          title = first(
+              (payload, ["issue", "title"]),
+              (payload, ["pull_request", "title"]),
+              (payload, ["release", "name"]),
+              (payload, ["release", "tag_name"]),
+          ) or "(no title)"
 
-# Bodies: comment body OR issue/pr body OR release notes
-detail = (
-    pick(('comment','body'),)
-    or pick(('issue','body'),)
-    or pick(('pull_request','body'),)
-    or pick(('release','body'),)
-    or ''
-)
+          number = first(
+              (payload, ["issue", "number"]),
+              (payload, ["pull_request", "number"]),
+          )
 
-# Build a clean, readable message
-header = '🛡️ **AEGIS Protocol — GitHub Update**'
-line_event = f'**Event:** `{event_name}`' + (f' • **Action:** `{action}`' if action else '')
-line_repo = f'**Repo:** `{repo}`'
-line_actor = f'**By:** `{actor}`'
-line_item = ''
-if number is not None:
-    line_item = f'**Item:** #{number} — {title}'
-else:
-    line_item = f'**Title:** {title}'
+          # Details priority: comment > issue body > PR body > release notes
+          detail = first(
+              (payload, ["comment", "body"]),
+              (payload, ["issue", "body"]),
+              (payload, ["pull_request", "body"]),
+              (payload, ["release", "body"]),
+          ) or ""
 
-lines = [header, '', line_event, line_repo, line_item, line_actor]
-if url:
-    lines.append(f'**Link:** {url}')
+          # Build message
+          header = "🛡️ **AEGIS Protocol — GitHub Update**"
+          line_event = f"**Event:** `{event_name}`" + (f" • **Action:** `{action}`" if action else "")
+          line_repo = f"**Repo:** `{repo}`"
+          line_actor = f"**By:** `{actor}`"
 
-if detail.strip():
-    lines.append('')
-    lines.append('**Details:**')
-    lines.append(codeblock(detail))
+          if number is not None:
+              line_item = f"**Item:** #{number} — {title}"
+          else:
+              line_item = f"**Title:** {title}"
 
-content = '\\n'.join(lines)
+          lines = [header, "", line_event, line_repo, line_item, line_actor]
+          if url:
+              lines.append(f"**Link:** {url}")
 
-body = json.dumps({'content': content}).encode('utf-8')
-req = urllib.request.Request(
-    webhook,
-    data=body,
-    headers={'Content-Type': 'application/json'},
-    method='POST'
-)
+          if detail.strip():
+              lines.extend(["", "**Details:**", codeblock(detail)])
 
-try:
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        print('Discord response:', resp.status)
-except urllib.error.HTTPError as e:
-    err = e.read().decode('utf-8', errors='replace')
-    print('Discord HTTPError:', e.code, err, file=sys.stderr)
-    sys.exit(1)
-"
+          content = "\n".join(lines)
+
+          # Discord hard limit is 2000 chars for content; keep margin
+          if len(content) > 1900:
+              content = content[:1900] + "…"
+
+          body = json.dumps({"content": content}).encode("utf-8")
+
+          req = urllib.request.Request(
+              webhook,
+              data=body,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+
+          try:
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                  print("Discord response:", resp.status)
+          except urllib.error.HTTPError as e:
+              err = e.read().decode("utf-8", errors="replace")
+              print("Discord HTTPError:", e.code, err, file=sys.stderr)
+              sys.exit(1)
+          PY
