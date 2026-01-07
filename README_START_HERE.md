@@ -1,5 +1,5 @@
 # Start Here (AEGIS Protocol)
-
+ 
 If you are new to AEGIS, read these in order.  
 Do not skip ahead.
 
