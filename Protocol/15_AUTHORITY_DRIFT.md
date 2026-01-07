@@ -1,155 +1,139 @@
-AEGIS PROTOCOL
-Authority Drift Declaration
-1. Purpose
+# AEGIS Protocol  
+## Authority Drift Declaration
 
-This document defines Authority Drift within the AEGIS Protocol and establishes mandatory mechanisms for its detection, classification, and correction.
+---
+
+## 1. Purpose
+
+This document defines **Authority Drift** within the AEGIS Protocol and establishes mandatory mechanisms for its detection, classification, and correction.
 
 Authority Drift occurs when system behavior gradually exceeds declared authority without an explicit expansion decision.
 
-Drift is not always malicious.
+Drift is not always malicious.  
 It is often incremental, accidental, or well-intentioned.
 
-AEGIS treats Authority Drift as a protocol fault, regardless of intent.
+AEGIS treats Authority Drift as a **protocol fault, regardless of intent**.
 
-2. Definition of Authority Drift
+---
 
-Authority Drift is present when any of the following occur without explicit authorization:
+## 2. Definition of Authority Drift
 
-inference expands beyond declared limits
+Authority Drift is present when any of the following occur **without explicit authorization**:
 
-descriptive outputs become evaluative
-
-assistance becomes suggestive or directive
-
-automation bypasses human intent
-
-boundaries are softened “temporarily”
-
-convenience overrides constraint
+- Inference expands beyond declared limits  
+- Descriptive outputs become evaluative  
+- Assistance becomes suggestive or directive  
+- Automation bypasses human intent  
+- Boundaries are softened “temporarily”  
+- Convenience overrides constraint  
 
 Drift may originate from:
 
-code changes
+- Code changes  
+- Prompt changes  
+- Model updates  
+- Operational shortcuts  
+- Operator expectation shifts  
 
-prompt changes
+**Outcome matters more than cause.**
 
-model updates
+---
 
-operational shortcuts
-
-operator expectation shifts
-
-Outcome matters more than cause.
-
-3. Drift Detection Signals
+## 3. Drift Detection Signals
 
 Authority Drift may be detected through signals including, but not limited to:
 
-outputs implying urgency or priority
+- Outputs implying urgency or priority  
+- Causal language where none is permitted  
+- Recommendations framed implicitly  
+- Explanations crossing shadow boundaries  
+- Classification used as justification  
+- Operator reliance patterns replacing judgment  
 
-causal language where none is permitted
+Detection does **not require certainty**.  
+**Suspicion alone is sufficient to trigger review.**
 
-recommendations framed implicitly
+---
 
-explanations crossing shadow boundaries
-
-classification used as justification
-
-operator reliance patterns replacing judgment
-
-Detection does not require certainty.
-Suspicion alone is sufficient to trigger review.
-
-4. Mandatory Drift Response
+## 4. Mandatory Drift Response
 
 When Authority Drift is suspected, AEGIS must:
 
-halt the offending behavior
+- Halt the offending behavior  
+- Surface the boundary being approached or crossed  
+- Degrade gracefully to the last known compliant state  
+- Require explicit human review before continuation  
 
-surface the boundary being approached or crossed
+AEGIS must **not**:
 
-degrade gracefully to the last known compliant state
+- Justify the behavior  
+- Attempt self-correction silently  
+- Continue operation “with caution”  
 
-require explicit human review before continuation
+**Silence is drift.**
 
-AEGIS must not:
+---
 
-justify the behavior
-
-attempt self-correction silently
-
-continue operation “with caution”
-
-Silence is drift.
-
-5. Drift Classification
+## 5. Drift Classification
 
 Authority Drift is classified into the following non-exhaustive categories:
 
-Inference Drift — reasoning exceeds evidence constraints
+- **Inference Drift** — Reasoning exceeds evidence constraints  
+- **Boundary Drift** — Shadow zones are weakened or bypassed  
+- **Agency Drift** — Human authority is diminished  
+- **Narrative Drift** — Description becomes explanation  
+- **Operational Drift** — Contract enforcement weakens  
 
-Boundary Drift — shadow zones are weakened or bypassed
+Classification exists to support **correction, not blame**.
 
-Agency Drift — human authority is diminished
+---
 
-Narrative Drift — description becomes explanation
-
-Operational Drift — contract enforcement weakens
-
-Classification exists to support correction, not blame.
-
-6. Correction and Recovery
+## 6. Correction and Recovery
 
 Correction requires:
 
-identification of the violating behavior
+- Identification of the violating behavior  
+- Mapping to the violated protocol document  
+- Explicit remediation decision by a human authority  
+- Documentation of the correction  
 
-mapping to the violated protocol document
-
-explicit remediation decision by a human authority
-
-documentation of the correction
-
-Rollback to a compliant state is preferred over patching forward.
+Rollback to a compliant state is **preferred over patching forward**.
 
 No correction may introduce new authority implicitly.
 
-7. Auditability and Evidence
+---
+
+## 7. Auditability and Evidence
 
 All detected drift events must be:
 
-logged
+- Logged  
+- Attributable  
+- Reviewable  
+- Preserved as evidence  
 
-attributable
-
-reviewable
-
-preserved as evidence
-
-Drift logs are not failures.
+**Drift logs are not failures.**  
 They are proof the protocol is functioning.
 
-8. Relationship to Other Protocol Documents
+---
+
+## 8. Relationship to Other Protocol Documents
 
 This declaration governs and reinforces:
 
-protocol/01_AUTHORITY_ENVELOPE.md
+- `protocol/01_AUTHORITY_ENVELOPE.md`  
+- `protocol/02_SHADOW_ZONES.md`  
+- `protocol/03_HUMAN_IN_THE_LOOP.md`  
+- `protocol/05_EVIDENCE_VS_INFERENCE.md`  
+- `protocol/07_CHANGE_ENVELOPE.md`  
+- `protocol/09_OPERATIONAL_CONTRACT.md`  
+- `protocol/12_ALPHA_EXIT_GATE.md`  
 
-protocol/02_SHADOW_ZONES.md
+Any conflict is resolved in favor of **stricter constraint**.
 
-protocol/03_HUMAN_IN_THE_LOOP.md
+---
 
-protocol/05_EVIDENCE_VS_INFERENCE.md
-
-protocol/07_CHANGE_ENVELOPE.md
-
-protocol/09_OPERATIONAL_CONTRACT.md
-
-protocol/12_ALPHA_EXIT_GATE.md
-
-Any conflict is resolved in favor of stricter constraint.
-
-9. Canonical Status
+## 9. Canonical Status
 
 This document is authoritative for all AEGIS implementations.
 
