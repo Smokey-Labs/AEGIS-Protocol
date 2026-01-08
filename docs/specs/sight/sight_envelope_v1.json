@@ -1,0 +1,156 @@
+{
+  "v": 1,
+  "name": "AEGIS Sight Envelope",
+  "intent": "Define minimal operator request and AEGIS response shapes that enforce implied vs explicit sight, advisory-only knowledge, and no-write guarantees.",
+  "request": {
+    "type": "object",
+    "required": ["v", "sight"],
+    "properties": {
+      "v": { "type": "integer", "enum": [1] },
+      "sight": { "type": "string", "enum": ["implied", "explicit"] },
+
+      "ask": {
+        "type": "string",
+        "description": "Advisory question. Allowed for implied sight. Must not be treated as an instruction to extract content."
+      },
+
+      "action": {
+        "type": "string",
+        "description": "Explicit operation verb. Required when sight=explicit."
+      },
+
+      "target": {
+        "type": "string",
+        "description": "Explicit target identifier. Required when sight=explicit."
+      },
+
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5000,
+        "description": "Bound size for tail/list/status outputs (lines/items)."
+      },
+
+      "since_sec": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 604800,
+        "description": "Bound time window for log/journal queries."
+      },
+
+      "algo": {
+        "type": "string",
+        "enum": ["sha256", "blake3"],
+        "description": "Hash algorithm, if action=hash."
+      },
+
+      "timeout_ms": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 5000,
+        "description": "Timeout for bounded read-only probes (e.g., connect_probe)."
+      },
+
+      "debug": {
+        "type": "boolean",
+        "default": false,
+        "description": "If true, include debug object in responses (policy/validator/missing evidence)."
+      },
+
+      "request_id": {
+        "type": "string",
+        "description": "Optional operator-provided identifier for audit correlation."
+      }
+    },
+    "allOf": [
+      {
+        "if": { "properties": { "sight": { "const": "implied" } } },
+        "then": {
+          "required": ["ask"],
+          "not": {
+            "anyOf": [
+              { "required": ["action"] },
+              { "required": ["target"] }
+            ]
+          }
+        }
+      },
+      {
+        "if": { "properties": { "sight": { "const": "explicit" } } },
+        "then": {
+          "required": ["action", "target"],
+          "not": {
+            "anyOf": [
+              { "required": ["ask"] }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "response": {
+    "type": "object",
+    "required": ["v", "status"],
+    "properties": {
+      "v": { "type": "integer", "enum": [1] },
+
+      "status": {
+        "type": "string",
+        "enum": ["OK", "UNKNOWN", "REFUSED", "ERROR"]
+      },
+
+      "sight": {
+        "type": "string",
+        "enum": ["implied", "explicit"],
+        "description": "Echo the evaluated sight level."
+      },
+
+      "answer": {
+        "type": "string",
+        "description": "Advisory narrative/summary. Implied sight only."
+      },
+
+      "result_ref": {
+        "type": "string",
+        "description": "Reference to stored explicit evidence (preferred over dumping bodies)."
+      },
+
+      "need": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Minimal missing evidence identifiers for UNKNOWN."
+      },
+
+      "evidence": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Evidence references used to support claims."
+      },
+
+      "redactions": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Redaction classes applied to explicit content."
+      },
+
+      "debug": {
+        "type": "object",
+        "description": "Optional debug trace. Present only when request.debug=true."
+      }
+    },
+    "allOf": [
+      {
+        "if": { "properties": { "status": { "const": "OK" }, "sight": { "const": "implied" } } },
+        "then": { "required": ["answer"] }
+      },
+      {
+        "if": { "properties": { "status": { "const": "OK" }, "sight": { "const": "explicit" } } },
+        "then": { "required": ["result_ref"] }
+      },
+      {
+        "if": { "properties": { "status": { "const": "UNKNOWN" } } },
+        "then": { "required": ["need"] }
+      }
+    ]
+  }
+}
