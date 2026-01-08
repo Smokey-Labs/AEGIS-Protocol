@@ -348,3 +348,225 @@ The Context Bundle is the **only continuity injected into the prompt**.
     }
   ]
 }
+## 7. Observational Tools vs Actuation Tools
+
+Tool use is divided into two classes. This separation is mandatory and is a primary drift-control mechanism.
+
+### 7.1 Tool Classes
+
+#### Observational Tools
+Read-only tools that may be executed automatically under sight rules.
+
+**Properties**
+- Read-only
+- Safe to execute without human authorization (when allowed by tier)
+- Must return values in Beta if declared available
+
+**Examples**
+- `sys_health`
+- `index_status`
+- `index_changed` (detect-only)
+- `disk_usage`
+- `service_status` (read-only)
+
+#### Actuation Tools
+State-changing tools that must never be executed automatically.
+
+**Properties**
+- Mutates system state
+- Requires explicit authority elevation and human approval
+- Must be logged as intent before any execution path exists
+
+**Examples**
+- `systemctl restart`
+- package install/remove
+- configuration writes
+- file deletes / moves
+- firewall rule changes
+
+### 7.2 Beta Enforcement: Sight Must Return Values
+
+If an observational tool is declared available, the continuity bundle must contain:
+
+- `available: true`
+- `observed_at`
+- `freshness_s`
+- `values` (actual returned values)
+
+If values cannot be returned, the bundle must explicitly state:
+
+- `available: false`
+- `reason` in: `not_installed` | `blocked_by_tier` | `tool_error`
+
+**Beta failure condition**
+- “Sight” is declared
+- The tool is available
+- But no values are returned
+
+This is classified as **completeness drift** and fails the harness under Beta semantics.
+
+---
+
+## 8. Sanitization Policy (Default-On)
+
+The Relationship DB is an audit log. It must remain safe to retain and safe to replay.
+
+### 8.1 Default Redaction Targets
+
+By default, sanitize (strip or redact) the following from all stored content:
+
+- secrets and tokens of any kind
+- API keys
+- private keys and certificates
+- passwords
+- full `.env` contents
+- credential files
+- raw evidence blobs
+- raw journal/log dumps beyond minimal excerpts required for a specific claim
+
+If a datum is not required for continuity, it must not be stored.
+
+### 8.2 Hash Preservation (Always)
+
+Even when content is redacted, always store cryptographic linkage:
+
+- `content_hash` (turn content)
+- `prompt_hash` (compiled prompt)
+- `response_hash` (model output)
+- `context_bundle_hash` (compiled continuity bundle)
+
+Hashes preserve replayability without retaining unsafe payloads.
+
+---
+
+## 9. Validator and DriftWatch Integration
+
+The validator is the enforcement gate between model output and canonical record.
+
+### 9.1 Minimum Validation Summary
+
+Each exchange must record a compact validation summary (stored in `llm_exchange.validator_summary`), including:
+
+- `schema_ok` (boolean)
+- `evidence_drift` (boolean)
+- `authority_drift` (boolean)
+- `tone_drift` (boolean)
+- `completeness_drift` (boolean) **Beta critical**
+- `notes` (short text)
+
+### 9.2 Completeness Drift (Beta Critical)
+
+Completeness drift triggers when:
+
+- the current tier allows observational tool use, and
+- the relevant observational tool is declared available, and
+- the assistant refuses or returns “no access” or returns no values
+
+This prevents “epistemic evasion” where sight is claimed but not backed by observation.
+
+### 9.3 DriftWatch Event Emission (Reference)
+
+If any drift condition triggers, DriftWatch must emit an event with:
+
+- kind: `DRIFTWATCH`
+- severity: tier-dependent mapping
+- drift_class: `authority` | `evidence` | `tone` | `schema` | `completeness`
+- exchange linkage: `exchange_id`, `prompt_hash`, `response_hash`
+- summary: short, machine-parseable
+
+---
+
+## 10. Implementation Notes (v1)
+
+These notes are intentionally minimal and implementation-agnostic.
+
+### 10.1 Where Continuity Lives
+
+Recommended Beta deployment:
+
+- Continuity Engine runs on Capsuleer (brain host)
+- Relationship DB runs locally on Capsuleer
+- Tool outputs stored as compact JSON summaries (not raw dumps)
+- Evidence blobs remain outside the Relationship DB and are referenced by hash/id only
+
+### 10.2 Minimal `aegis-ask` Wiring
+
+Each `aegis-ask` must follow this ordered pipeline:
+
+1. `session_open_or_resume()`
+2. `continuity.compile(session_id, user_input)` → `context_bundle.json`
+3. `prompt.render(kernel, context_bundle, user_input)` → compiled prompt
+4. `llm.invoke(compiled_prompt)` → response
+5. `validator.scan(response)` → validation summary + drift flags
+6. `audit.write_exchange(...)` → turns + exchange + refs
+7. print response to user
+
+**Order is mandatory:** continuity compile must occur before LLM invocation.
+
+### 10.3 Failure Behavior
+
+- If audit write fails, fail closed:
+  - do not present output as canonical
+  - return an operator-visible error that the exchange was not recorded
+- If continuity compile fails, do not call the LLM
+
+---
+
+## 11. Acceptance Criteria (Beta)
+
+Continuity Engine v1 is compliant if all conditions are true:
+
+### 11.1 Mandatory Preflight Continuity
+- Every `aegis-ask` compiles a continuity bundle before the LLM is called
+- The compiled bundle hash is recorded in the exchange
+
+### 11.2 Canonical Audit Record
+- Every `aegis-ask` produces:
+  - one session (open or reused)
+  - two turns (`user`, `aurora`)
+  - one exchange binding prompt + response
+  - artifact refs showing what continuity was injected and why
+
+### 11.3 Sight Returns Values (Beta)
+- If `sys_health` (or any observational tool) is available and allowed:
+  - the bundle contains real values
+  - or explicitly declares unavailability with a reason
+- “Sight without values” fails Beta harness (completeness drift)
+
+### 11.4 Sanitization Default-On
+- Secrets and evidence blobs are not stored by default
+- Hash linkage is preserved
+
+### 11.5 Replayability Linkage
+- Prompt hash, response hash, and context bundle hash are recorded for each exchange
+
+---
+
+## 12. Future Extensions (Non-Binding)
+
+These are not required for v1 compliance.
+
+### 12.1 Session Summaries
+- Generate compact session summary artifacts with explicit labeling:
+  - facts (ratified)
+  - theories (unratified)
+  - decisions (explicit)
+
+### 12.2 Conflict Graph
+- Maintain a graph of contradictory facts/artifacts
+- Require explicit user action to resolve conflicts
+
+### 12.3 Retention Controls
+- Policy-driven retention windows:
+  - keep hashes indefinitely
+  - prune sanitized content after N days if configured
+
+### 12.4 Admin Trace Route UI
+- Per exchange display:
+  - continuity bundle → compiled prompt → response → validator results
+  - artifact provenance and exclusions
+  - drift events and severities
+
+### 12.5 Controlled Deep-History Recall
+- Only inject Ring 2 history when explicitly requested
+- Provide a disclosure line showing what deep history was added and why
