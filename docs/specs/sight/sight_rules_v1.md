@@ -97,3 +97,88 @@ If bounds are not provided:
 ## Output Shape Preference
 - Prefer storing extracted explicit evidence and returning `result_ref` over dumping bodies.
 - When bodies must be returned, redact and bound them and record the redaction classes applied.
+
+---
+
+## How to Interpret the Sight Schemas
+
+The JSON files in this directory are **normative contracts**.
+They are not explanatory documents.
+
+This section explains how to read them correctly.
+
+---
+
+### `sight_envelope_v1.json`
+
+This schema defines the **only valid shape** of operator requests and AEGIS responses.
+
+Key interpretation rules:
+- `sight="implied"` means *awareness only*
+- `sight="explicit"` requires both `action` and `target`
+- `ask` is advisory text only and must never be treated as an instruction
+- Explicit requests without action or target must fail
+- Implied requests that include action or target must fail
+
+This schema exists to prevent **implicit authority escalation**.
+
+---
+
+### `actions_v1.json`
+
+This file is a **positive allowlist**.
+
+Interpretation rules:
+- If an action is not listed, AEGIS must refuse it
+- Each action declares:
+  - Required sight level
+  - Valid target classes
+  - Default bounds
+  - Hard maximum bounds
+- Bounds are mandatory, even if not supplied by the operator
+- Redaction expectations are enforced by the executor
+
+This file defines **what AEGIS can do**, not what it might want to do.
+
+---
+
+### `action_blacklist_v1.json`
+
+This file is **defensive governance**.
+
+Interpretation rules:
+- Any action matching this list must be refused
+- Blacklist checks are applied **before** allowlist resolution
+- This file exists to protect against:
+  - Accidental feature exposure
+  - Future overreach
+  - Authority drift under pressure
+
+Even if an implementation exists, the blacklist wins.
+
+---
+
+### Relationship Between Markdown and JSON
+
+- **Markdown files** explain intent, rules, and philosophy
+- **JSON files** define enforceable structure and limits
+
+When ambiguity exists:
+- JSON defines what is allowed
+- Markdown explains why
+
+When conflict exists:
+- The JSON contract is authoritative for execution
+- The Markdown text is authoritative for interpretation
+
+---
+
+### Why This Split Exists
+
+Humans reason in language.  
+Systems enforce structure.
+
+Sight v1 requires both to remain safe.
+
+The schemas keep AEGIS honest.  
+The documentation keeps humans informed.
