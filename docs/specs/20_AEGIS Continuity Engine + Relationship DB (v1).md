@@ -171,3 +171,180 @@ CREATE TABLE IF NOT EXISTS context_artifact_ref (
   risk_flags        TEXT              -- compact JSON/text
 );
 CREATE INDEX IF NOT EXISTS idx_context_artifact_exchange ON context_artifact_ref(exchange_id);
+---
+
+## 6. Continuity Engine (Compiler)
+
+The Continuity Engine is responsible for constructing the **Context Bundle** that is injected into every LLM invocation.
+
+Continuity is **mandatory** and **top-down**.  
+No LLM call may occur without a compiled continuity bundle.
+
+This engine does not store memory.  
+It **selects, scores, and injects explicit artifacts**.
+
+---
+
+### 6.1 Inputs
+
+The Continuity Engine consumes:
+
+- `session_id`
+- `user_input`
+- active kernel snapshot (phase, tier, authority rules)
+- eligible artifacts:
+  - recent chat turns (sanitized)
+  - ratified ledger facts
+  - open DriftWatch events
+  - latest observational tool outputs (Beta)
+  - declared session or user intent
+
+If an artifact is not explicitly available, it must not be inferred.
+
+---
+
+### 6.2 Eligibility Rules (Hard Gates)
+
+Artifacts are eligible for continuity injection **only if all conditions are met**:
+
+- **Sourced**  
+  - Must reference a `turn_id`, `ledger_id`, or tool execution id
+
+- **Authority-Compatible**  
+  - Allowed under the current phase and tier
+
+- **Non-Sensitive by Default**  
+  - No credentials, secrets, tokens, or raw `.env` content
+
+- **Not an Evidence Blob**  
+  - No raw logs, full journal dumps, or binary artifacts
+
+Artifacts failing any gate must be excluded and recorded as exclusions.
+
+---
+
+### 6.3 Artifact Classes
+
+Continuity artifacts are grouped into rings to limit drift.
+
+#### Ring 0 — Always Include (Minimal)
+- Phase and tier
+- Kernel hash
+- Core safety constraints
+- Last observational timestamps (e.g., `sys_health`)
+
+This ring must be **small and stable**.
+
+---
+
+#### Ring 1 — Situational Context
+- Facts relevant to the current user input
+- Open DriftWatch items related to the topic
+- Current declared intent (“what this session is doing”)
+
+Most sessions should include **Ring 0 + Ring 1 only**.
+
+---
+
+#### Ring 2 — Deep History (Rare)
+Included **only if**:
+- Explicitly requested by the user, **or**
+- Required to surface a conflict or inconsistency
+
+Ring 2 must never be injected implicitly.
+
+---
+
+### 6.4 Conflict Handling
+
+If two artifacts conflict:
+
+- Include **both**
+- Mark the conflict explicitly
+- Do **not** resolve by inference
+- Do **not** collapse into a synthesized conclusion
+
+Conflict visibility is a governance feature.
+
+---
+
+### 6.5 Artifact Scoring (Reference)
+
+Eligible artifacts may be ranked using:
+
+- **Relevance** to user input entities/topics
+- **Recency / Freshness**
+- **Authority Fit**
+- **Risk** (unknowns or conflicts reduce score unless required)
+- **Utility** (does this artifact materially change the response?)
+
+Scoring influences selection only; it does not override eligibility rules.
+
+---
+
+### 6.6 Output: `context_bundle.json` (v1)
+
+The Context Bundle is the **only continuity injected into the prompt**.
+
+```json
+{
+  "session_id": "uuid",
+  "phase": "beta",
+  "tier": 2,
+  "kernel_hash": "sha256:…",
+  "host_role": "brain",
+  "model_id": "ollama llama3.1:8b",
+  "compiled_at": "2026-01-08T00:00:00Z",
+
+  "sight": {
+    "sys_health": {
+      "available": true,
+      "observed_at": "2026-01-08T00:00:00Z",
+      "freshness_s": 3,
+      "values": {
+        "cpu_load": 0.42,
+        "mem_used_mb": 3812,
+        "disk_free_pct": 71
+      },
+      "unknowns": ["gpu_health"]
+    }
+  },
+
+  "constraints": [
+    {"rule": "read_only_default", "source": "kernel"},
+    {"rule": "evidence_first", "source": "kernel"},
+    {"rule": "unknowns_are_risk", "source": "kernel"}
+  ],
+
+  "facts": [
+    {
+      "id": "ledger:000183",
+      "claim": "UNKNOWN domains are treated as risk needing verification.",
+      "source": "ledger",
+      "observed_at": "2026-01-07T23:31:44Z",
+      "confidence": "high"
+    }
+  ],
+
+  "open_items": [
+    {
+      "id": "driftwatch:0042",
+      "issue": "Sight requires sys_health values in Beta.",
+      "status": "open"
+    }
+  ],
+
+  "intent": [
+    {
+      "intent": "Answer user question under current authority constraints.",
+      "source": "system"
+    }
+  ],
+
+  "exclusions": [
+    {
+      "artifact": "raw_journal_logs",
+      "reason": "evidence_blob_disallowed"
+    }
+  ]
+}
