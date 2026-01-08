@@ -1,0 +1,147 @@
+{
+  "v": 1,
+  "principles": {
+    "knowledge_is_advisory_only": true,
+    "implied_sight_default": true,
+    "detail_requires_explicit_sight": true,
+    "no_write_actions": true
+  },
+  "actions": [
+    {
+      "name": "list",
+      "sight_required": "implied",
+      "targets": ["dir:*", "glob:*"],
+      "defaults": { "limit": 200 },
+      "bounds": { "max_limit": 1000 },
+      "notes": "Names only. No file bodies."
+    },
+    {
+      "name": "stat",
+      "sight_required": "implied",
+      "targets": ["file:*", "dir:*"],
+      "defaults": {},
+      "bounds": {},
+      "notes": "Metadata only (owner/perms/mtime/size)."
+    },
+    {
+      "name": "hash",
+      "sight_required": "implied",
+      "targets": ["file:*"],
+      "defaults": { "algo": "sha256" },
+      "bounds": { "max_bytes": 104857600 },
+      "notes": "Hashing may be bounded by file size to prevent resource abuse."
+    },
+    {
+      "name": "unit_list",
+      "sight_required": "implied",
+      "targets": ["unit:*"],
+      "defaults": { "state": "all" },
+      "bounds": {},
+      "notes": "Enumerate units, not logs."
+    },
+    {
+      "name": "unit_status",
+      "sight_required": "explicit",
+      "targets": ["unit:*"],
+      "defaults": { "limit": 120 },
+      "bounds": { "max_limit": 500 },
+      "notes": "Bounded status output. No secret env expansion."
+    },
+    {
+      "name": "unit_cat",
+      "sight_required": "explicit",
+      "targets": ["unit:*"],
+      "defaults": { "redact": ["Environment=", "EnvironmentFile="] },
+      "bounds": { "max_bytes": 65536 },
+      "notes": "Unit file content is explicit. Redactions applied."
+    },
+    {
+      "name": "tail",
+      "sight_required": "explicit",
+      "targets": ["journal:*", "docker:logs:*", "file:*"],
+      "defaults": { "limit": 200, "since_sec": 3600 },
+      "bounds": { "max_limit": 2000, "max_since_sec": 604800 },
+      "notes": "Bounded log/content tail. Redactions applied."
+    },
+    {
+      "name": "read",
+      "sight_required": "explicit",
+      "targets": ["file:*"],
+      "defaults": { "redact": ["secrets", "tokens", "private_keys"] },
+      "bounds": { "max_bytes": 131072 },
+      "notes": "File content is explicit-only and size-bounded."
+    },
+    {
+      "name": "port_listeners",
+      "sight_required": "implied",
+      "targets": ["listen", "port:*"],
+      "defaults": {},
+      "bounds": {},
+      "notes": "Listeners + owning process only; no payload inspection."
+    },
+    {
+      "name": "net_route",
+      "sight_required": "implied",
+      "targets": ["route"],
+      "defaults": {},
+      "bounds": {},
+      "notes": "Routing table for stability diagnostics."
+    },
+    {
+      "name": "dns_status",
+      "sight_required": "implied",
+      "targets": ["dns"],
+      "defaults": {},
+      "bounds": {},
+      "notes": "Resolver status only (no secrets)."
+    },
+    {
+      "name": "connect_probe",
+      "sight_required": "explicit",
+      "targets": ["host:*"],
+      "defaults": { "timeout_ms": 1000 },
+      "bounds": { "max_timeout_ms": 5000 },
+      "notes": "Read-only connectivity probe (no exploitation, no scanning)."
+    },
+    {
+      "name": "pkg_inventory",
+      "sight_required": "implied",
+      "targets": ["pkg:apt", "pkg:*"],
+      "defaults": {},
+      "bounds": {},
+      "notes": "Package inventory for stability."
+    },
+    {
+      "name": "kernel_info",
+      "sight_required": "implied",
+      "targets": ["kernel", "os:release"],
+      "defaults": {},
+      "bounds": {},
+      "notes": "Kernel + OS release metadata."
+    },
+    {
+      "name": "docker_ps",
+      "sight_required": "implied",
+      "targets": ["docker:ps"],
+      "defaults": {},
+      "bounds": {},
+      "notes": "Container inventory (names/images/ports)."
+    },
+    {
+      "name": "docker_inspect_safe",
+      "sight_required": "explicit",
+      "targets": ["docker:container:*", "docker:image:*"],
+      "defaults": { "redact": ["Env", "Mounts:secrets"] },
+      "bounds": { "max_bytes": 131072 },
+      "notes": "Explicit and redacted inspection."
+    },
+    {
+      "name": "aegis_ledger_query",
+      "sight_required": "implied",
+      "targets": ["aegis:ledger", "aegis:host:*", "aegis:event:*"],
+      "defaults": { "limit": 200 },
+      "bounds": { "max_limit": 5000 },
+      "notes": "Read-only audit trail queries."
+    }
+  ]
+}
