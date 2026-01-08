@@ -47,18 +47,6 @@ A DriftWatch event is a ledger entry with:
 
 ---
 
-## Installation
-
-The AEGIS command interface is installed at:
-
-
-DriftWatch reads from the immutable ledger located at:
-
-
-No write operations are permitted except explicit human acknowledgement.
-
----
-
 ## Operating Model
 
 DriftWatch is passive by design.
