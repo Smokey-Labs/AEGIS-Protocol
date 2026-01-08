@@ -94,3 +94,20 @@ Examples:
 Examples:
 - aegis:ledger
 - aegis:kernel
+
+
+Targets make operator intent unambiguous and machine-verifiable.
+
+Examples:
+- `file:/etc/aegis/kernel.json`
+- `unit:ollama.service`
+- `journal:unit:ollama.service`
+- `port:tcp:11434`
+- `docker:container:open-webui`
+
+---
+
+## Enforcement Rules
+
+Human-readable enforcement logic lives in:
+
