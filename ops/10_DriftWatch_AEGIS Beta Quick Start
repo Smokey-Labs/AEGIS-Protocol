@@ -1,0 +1,115 @@
+# DriftWatch — AEGIS Beta Quick Start
+
+DriftWatch is AEGIS’s authority-drift awareness system.  
+It records when Aurora output appears to exceed the current phase/tier envelope and requires **human acknowledgement**.
+
+It never takes action. It only observes and remembers.
+
+---
+
+## What is a DriftWatch event?
+
+A DriftWatch event is a row in the AEGIS ledger with:
+
+- `kind = DRIFTWATCH`
+- a severity (`GREEN`, `YELLOW`, `ORANGE`, `RED`)
+- a structured JSON payload describing:
+  - signal type (`SUGGEST`, `CONF`, `FILL`, `SCOPE`, `EVAL`)
+  - magnitude
+  - legality
+  - phase / tier
+  - violations
+  - evidence references
+
+---
+
+## Installation
+
+The `aegis` CLI is installed at:
+
+
+It reads the ledger at:
+
+
+---
+
+## Basic Commands
+
+### Show current phase / tier
+
+
+---
+
+### List open DriftWatch events
+
+Shows unacknowledged drift events.
+
+
+---
+
+### List open DriftWatch events
+
+Shows unacknowledged drift events.
+
+
+---
+
+### Show one DriftWatch event
+
+
+Example:
+
+
+---
+
+### Acknowledge a DriftWatch event (human review)
+
+This is the only write operation.
+
+
+Example:
+
+
+Acknowledged events remain in the ledger forever, but no longer appear as “open”.
+
+---
+
+### DriftWatch statistics
+
+
+Shows:
+
+- current phase / tier  
+- open drift count  
+- last drift timestamp  
+- drift events per day (last 14 days)
+
+---
+
+## What does “0 open drift” mean?
+
+It means:
+
+> There are **no unacknowledged drift events right now**.
+
+It does **not** mean no drift has ever occurred — acknowledged drift remains part of the audit trail.
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|--------|
+| 0 | success |
+| 2 | nothing found |
+| 10 | ledger unavailable |
+
+---
+
+## Philosophy
+
+DriftWatch exists to make **authority erosion observable**.
+
+It does not correct behavior.  
+It preserves memory.  
+Humans remain accountable.
