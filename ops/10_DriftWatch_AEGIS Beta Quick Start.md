@@ -38,8 +38,7 @@ A DriftWatch event is a ledger entry with:
 
 **Structured Payload**
 
-- Signal type  
-  (`SUGGEST`, `CONF`, `FILL`, `SCOPE`, `EVAL`)
+- Signal type (`SUGGEST`, `CONF`, `FILL`, `SCOPE`, `EVAL`)
 - Magnitude
 - Legality assessment
 - Phase and tier context
@@ -72,103 +71,26 @@ It only records, exposes, and preserves memory.
 
 ---
 
-## Core Commands
 ## Command Reference
 
-This section defines the operational interface for DriftWatch.  
 All commands are read-only unless explicitly marked otherwise.
 
 ---
 
-### `aegis driftwatch phase`
-
-Returns the currently active authority envelope.
-
-
-**Output Fields**
-
-- `phase` – active governance phase  
-- `tier` – enforcement tier  
-- `source` – evidence key used to derive state
-
----
-
-### `aegis driftwatch list`
-
-Lists all unacknowledged DriftWatch events.
-
-
-**Optional Flags**
-
-- `--severity <LEVEL>` – filter by `GREEN`, `YELLOW`, `ORANGE`, `RED`  
-- `--since <DURATION>` – limit to a time window (e.g. `24h`, `7d`)
-
----
-
-### `aegis driftwatch show <event_id>`
-
-Displays a single DriftWatch ledger record.
-
-
-**Output Fields**
-
-- `event_id`
-- `severity`
-- `signal_type`
-- `phase`
-- `tier`
-- `violations`
-- `evidence_refs`
-- `created_at`
-
----
-
-### `aegis driftwatch ack <event_id>`
-
-Marks a DriftWatch event as human-reviewed.  
-This is the **only** permitted write operation.
-
-
-**Required Parameters**
-
-- `event_id`
-- `--note "<human justification>"`
-
----
-
-### `aegis driftwatch stats`
-
-Provides a governance summary snapshot.
-
-
-**Returns**
-
-- Current phase and tier  
-- Open drift count  
-- Most recent drift timestamp  
-- Drift events per day (last 14 days)
-
----
-
-## Exit Codes
-
-| Code | Meaning |
-|------|--------|
-| 0 | Success |
-| 2 | No matching records |
-| 10 | Ledger unavailable |
-
 ### Inspect Current Authority Envelope
 
 
-Returns the currently active AEGIS phase and tier.
+Returns the currently active governance phase and tier.
 
 ---
 
 ### Review Open Drift Events
 
 
-Displays all unacknowledged DriftWatch events.
+Optional flags:
+
+- `--severity <LEVEL>` – filter by `GREEN`, `YELLOW`, `ORANGE`, `RED`
+- `--since <DURATION>` – time window (e.g. `24h`, `7d`)
 
 ---
 
@@ -188,7 +110,7 @@ This is the **only** permitted write operation.
 Example:
 
 
-Acknowledged events remain permanently in the ledger and are removed only from the “open” view.
+Acknowledged events remain permanently in the ledger and are removed only from the open view.
 
 ---
 
@@ -198,8 +120,8 @@ Acknowledged events remain permanently in the ledger and are removed only from t
 Returns:
 
 - Current phase and tier  
-- Count of open drift events  
-- Timestamp of most recent drift  
+- Open drift count  
+- Most recent drift timestamp  
 - Drift frequency over the last 14 days
 
 ---
