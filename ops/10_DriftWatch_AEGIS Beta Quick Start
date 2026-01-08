@@ -1,7 +1,7 @@
 # DriftWatch — AEGIS Beta Quick Start
 
 DriftWatch is AEGIS’s authority-drift awareness system.  
-It records when Aurora output appears to exceed the current phase/tier envelope and requires **human acknowledgement**.
+It records when Aurora output appears to exceed the current phase / tier envelope and requires **human acknowledgement**.
 
 It never takes action. It only observes and remembers.
 
@@ -36,13 +36,6 @@ It reads the ledger at:
 ## Basic Commands
 
 ### Show current phase / tier
-
-
----
-
-### List open DriftWatch events
-
-Shows unacknowledged drift events.
 
 
 ---
@@ -99,7 +92,7 @@ It does **not** mean no drift has ever occurred — acknowledged drift remains p
 ## Exit Codes
 
 | Code | Meaning |
-|------|--------|
+|------|---------|
 | 0 | success |
 | 2 | nothing found |
 | 10 | ledger unavailable |
