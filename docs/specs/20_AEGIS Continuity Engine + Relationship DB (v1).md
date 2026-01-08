@@ -113,7 +113,7 @@ This prevents “sight-by-claim” and enforces honest observation.
 ### 5.2 PostgreSQL schema (reference)
 
 #### `chat_session`
-```sql
+sql
 CREATE TABLE IF NOT EXISTS chat_session (
   session_id      UUID PRIMARY KEY,
   started_at      TIMESTAMPTZ NOT NULL,
@@ -286,7 +286,7 @@ Scoring influences selection only; it does not override eligibility rules.
 
 The Context Bundle is the **only continuity injected into the prompt**.
 
-```json
+json
 {
   "session_id": "uuid",
   "phase": "beta",
