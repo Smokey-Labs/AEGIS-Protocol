@@ -92,3 +92,66 @@ DriftWatch observes **patterns**, not individual outcomes.
 Observed operator interactions include:
 - Listing open DriftWatch events
 - Viewing individual ev
+ents
+- Acknowledging events as seen by an operator
+
+Acknowledgement does not remove or invalidate events.
+It records that the event has been observed.
+
+---
+
+## DriftWatch Is Not Escalation
+
+DriftWatch does not:
+- Page operators
+- Trigger automation
+- Lock systems
+- Change authority levels
+
+Any escalation logic must be implemented outside DriftWatch
+and explicitly documented as such.
+
+---
+
+## Drift as a Governance Signal
+
+DriftWatch events indicate **stress on boundaries**, not failure.
+
+Repeated drift signals suggest:
+- Documentation gaps
+- Misaligned expectations
+- Incentive pressure
+- Operator misunderstanding
+
+The correct response is governance review, not suppression.
+
+---
+
+## Explicit Non-Claims
+
+DriftWatch documentation makes no claims about:
+- Detection thresholds
+- Scoring models
+- Severity weighting
+- Automated responses
+- Storage schema
+
+All such claims require live-system evidence.
+
+---
+
+## Evidence Basis
+
+This document is grounded in:
+- Operator CLI usage references
+- Design discussions rejecting automated enforcement
+- Governance framing around pressure and normalization
+
+No implementation assumptions are made.
+
+---
+
+## Status
+
+**Status:** Draft — Evidence Complete  
+**Blocking Dependencies:** None
