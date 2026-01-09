@@ -61,4 +61,76 @@ Documentation MUST:
 - State what evidence is required to resolve them
 - Avoid speculative language
 
-Example:
+Example: UNKNOWN — Requires live system inspection of systemd units on Capsuleer
+
+---
+
+## Documentation as a Governance Surface
+
+Documentation itself can create authority drift.
+
+Incorrect or speculative documentation:
+- Encourages unsafe operator behavior
+- Masks uncertainty
+- Creates false confidence
+- Pressures the system to “match the docs”
+
+For this reason, documentation is treated as a **governed interface**.
+
+---
+
+## Documentation Lifecycle
+
+Documentation progresses through these states:
+
+- **Draft (Evidence Complete)** — Claims supported by admissible evidence
+- **Draft (Evidence Partial)** — Contains explicit UNKNOWN blocks
+- **Blocked** — Awaiting required evidence
+- **Canonical** — Stable, reviewed, and referenced by other documents
+
+Promotion between states requires evidence, not time.
+
+---
+
+## Handling Legacy or Overlapping Documents
+
+When multiple documents cover similar topics:
+
+- One document MUST be declared canonical
+- All others MUST:
+  - Explicitly defer to the canonical document, or
+  - Be moved to an archive or legacy section
+
+Duplication without declared hierarchy is prohibited.
+
+---
+
+## Conflict Resolution
+
+If two documents conflict:
+
+1. Live system behavior wins
+2. Regression harness output wins
+3. Canonical governance docs win
+4. All others lose
+
+Conflicts must be resolved by **updating documentation**, not reinterpretation.
+
+---
+
+## Final Authority Statement
+
+Documentation may describe AEGIS.
+
+Documentation may constrain understanding.
+
+Documentation may never expand authority.
+
+---
+
+## Status
+
+**Status:** Canonical  
+**Effective Date:** Immediate  
+**Applies To:** Entire Repository
+
