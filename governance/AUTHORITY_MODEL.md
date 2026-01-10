@@ -18,7 +18,7 @@ Referenced by:
 - Protocol/03_evidence_registry.md
 - Protocol/05_enforcement_gateway.md
 - Protocol/04_authority_posture_interpreter_api.md
-- 
+
 ---
 
 ## Core Principle
