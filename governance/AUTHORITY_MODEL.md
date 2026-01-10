@@ -1,6 +1,7 @@
 # AEGIS Authority Model
 **Phases, Tiers, and the Authority Envelope**
 
+Status: DRAFT — authoritative intent exists, formalization pending.
 ---
 
 ## Purpose
@@ -13,6 +14,11 @@ It does not document implementation details.
 
 It defines **what AEGIS is allowed to do**, and more importantly, **what it must not do**.
 
+Referenced by:
+- Protocol/03_evidence_registry.md
+- Protocol/05_enforcement_gateway.md
+- Protocol/04_authority_posture_interpreter_api.md
+- 
 ---
 
 ## Core Principle
