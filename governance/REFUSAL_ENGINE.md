@@ -2,6 +2,10 @@
 
 Status: DRAFT — authoritative intent exists, formalization pending.
 
+> **Canonical reference:** `governance/REFUSAL_ENGINE.md`  
+> This document describes subsystem-level integration details.
+
+
 Purpose:
 Defines when and how AEGIS refuses: lack of authority, lack of evidence, unsafe intent, or policy breach. Refusals are a governed outcome, recorded in the ledger.
 
