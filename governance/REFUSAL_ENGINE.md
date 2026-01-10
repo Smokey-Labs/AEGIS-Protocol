@@ -1,9 +1,11 @@
-# <TITLE>
+# Refusal Engine
 
-Status: DRAFT — authoritative intent exists, full formalization pending.
+Status: DRAFT — authoritative intent exists, formalization pending.
 
 Purpose:
-<2–3 sentences max>
+Defines when and how AEGIS refuses: lack of authority, lack of evidence, unsafe intent, or policy breach. Refusals are a governed outcome, recorded in the ledger.
 
 Referenced by:
-- <list of protocol docs that rely on this>
+- Protocol/05_enforcement_gateway.md
+- Protocol/04_authority_posture_interpreter_api.md
+- Protocol/08_governance_ledger.md
