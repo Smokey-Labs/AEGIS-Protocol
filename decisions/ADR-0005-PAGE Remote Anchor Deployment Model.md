@@ -18,7 +18,7 @@ A PAGE Remote Anchor is a small, bounded component deployed on LAN hosts that:
 
 It is a witness, not an enforcer.
 
-## Why Pull-Based (Option B)
+## Why Pull-Based
 Pull-based deployment aligns with AEGIS governance:
 - avoids centralized remote execution on every host
 - reduces credential sprawl and blast radius
